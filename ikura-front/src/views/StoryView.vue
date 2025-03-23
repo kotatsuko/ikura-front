@@ -1,7 +1,7 @@
 <template>
   <!-- たつや担当 -->
-  <div>
-    <h1>ストーリー画面</h1>
+  <div class = 'main'>
+    <h1 class = 'title'>イクラどんの冒険（仮）</h1>
 
     <!-- ローディング表示 -->
     <p v-if="gameStore.loading">データを取得中...</p>
@@ -9,39 +9,49 @@
 
     <!-- 画面表示 -->
     <div v-if="currentScreen">
-      <h2>{{ currentScreen.screenType }}</h2>
-      <img
-        v-if="currentScreen.characterFileName"
-        :src="`/ikura/images/${currentScreen.characterFileName}`"
-        alt="キャラクター"
-      />
-      <img
-        v-if="currentScreen.backFileName"
-        :src="`/ikura/images/${currentScreen.backFileName}`"
-        alt="背景"
-      />
-
-      <!-- セリフ表示 -->
-      <div v-for="line in lines" :key="line.lineId">
-        <p :class="'line-size-' + line.lineSize">{{ line.line }}</p>
+      <!-- スクリーンタイプ -->
+      <!-- <h2>{{ currentScreen.screenType }}</h2> -->
+      <!-- 背景画像 -->
+      <div class = 'backFile'>
+        <img class = 'backFileImg'
+          v-if="currentScreen.backFileName"
+          :src="`/ikura/images/${currentScreen.backFileName}`"
+          alt="背景"
+        />
+      </div>
+      <!-- キャラクター画像 -->
+      <div class = 'characterFile'>
+        <img class = 'characterFileImg'
+          v-if="currentScreen.characterFileName"
+          :src="`/ikura/images/${currentScreen.characterFileName}`"
+          alt="キャラクター"
+        />
       </div>
 
-      <!-- 分岐ボタン表示 -->
-      <div v-if="branches.length > 0">
+      <!-- テキスト部分 -->
+      <div class = 'text'>
+        <!-- セリフ表示 -->
+        <div v-for="line in lines" :key="line.lineId">
+          <p :class="'line-size-' + line.lineSize">{{ line.line }}</p>
+        </div>
+
+        <!-- 分岐ボタン表示 -->
+        <div v-if="branches.length > 0">
+          <button
+            v-for="branch in branches"
+            :key="branch.branchId"
+            @click="changeScreen(branch.nextScreenId)"
+          >
+            {{ branch.buttonLabel }}
+          </button>
+        </div>
         <button
-          v-for="branch in branches"
-          :key="branch.branchId"
-          @click="changeScreen(branch.nextScreenId)"
+          v-else-if="currentScreen.nextScreenId !== null"
+          @click="changeScreen(currentScreen.nextScreenId)"
         >
-          {{ branch.buttonLabel }}
+          次へ
         </button>
       </div>
-      <button
-        v-else-if="currentScreen.nextScreenId !== null"
-        @click="changeScreen(currentScreen.nextScreenId)"
-      >
-        次へ
-      </button>
     </div>
     <p v-else>currentScreen が `null` または `undefined` です</p>
   </div>
@@ -105,6 +115,12 @@ watch(currentScreen, (newVal, oldVal) => {
 </script>
 
 <style scoped>
+body {
+  margin: 0;
+}
+.main {
+  margin: 0;
+}
 .error {
   color: red;
   font-weight: bold;
@@ -117,5 +133,9 @@ watch(currentScreen, (newVal, oldVal) => {
 }
 .line-size-2 {
   font-size: large;
+}
+.backFileImg, .characterFileImg {
+  width: 100vw;
+  margin: 0;
 }
 </style>
