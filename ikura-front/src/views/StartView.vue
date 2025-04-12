@@ -16,7 +16,7 @@ const goMaintenance = () => {
   <!-- さいちゃん担当 -->
 
   <!--
-  <button @click="goNext">test始める</button>
+  <button @click="goNext">testtest始める</button>
   -->
 
   <!---追加------->
