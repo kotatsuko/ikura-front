@@ -4,65 +4,45 @@
     <!-- デバッグ用テーブル表示 -->
     <div class="debug-view">
       <h2>デバッグビュー（画面）</h2>
-      <table>
+      <table v-if="screens.length">
         <thead>
           <tr>
-            <th>画面ID</th>
-            <th>次画面ID</th>
-            <th>親画面ID</th>
-            <th>分岐ID</th>
-            <th>深さ</th>
+            <th v-for="key in Object.keys(screens[0])" :key="key">{{ key }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="s in screens" :key="s.screen_id">
-            <td>{{ s.screen_id }}</td>
-            <td>{{ s.next_screen_id }}</td>
-            <td>{{ s.parent_screen_id }}</td>
-            <td>{{ s.from_branch_id }}</td>
-            <td>{{ s.depth }}</td>
+            <td v-for="key in Object.keys(s)" :key="key">{{ s[key] }}</td>
           </tr>
         </tbody>
       </table>
 
       <h2>デバッグビュー（分岐）</h2>
-      <table>
+      <table v-if="branches.length">
         <thead>
           <tr>
-            <th>画面ID</th>
-            <th>分岐ID</th>
-            <th>ラベル</th>
-            <th>次画面ID</th>
+            <th v-for="key in Object.keys(branches[0])" :key="key">
+              {{ key }}
+            </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="b in branches" :key="`b-${b.screen_id}-${b.branch_id}`">
-            <td>{{ b.screen_id }}</td>
-            <td>{{ b.branch_id }}</td>
-            <td>{{ b.button_label }}</td>
-            <td>{{ b.next_screen_id }}</td>
+            <td v-for="key in Object.keys(b)" :key="key">{{ b[key] }}</td>
           </tr>
         </tbody>
       </table>
 
       <h2>デバッグビュー（セリフ）</h2>
-      <table>
+      <table v-if="lines.length">
         <thead>
           <tr>
-            <th>画面ID</th>
-            <th>セリフID</th>
-            <th>内容</th>
-            <th>サイズ</th>
-            <th>種別</th>
+            <th v-for="key in Object.keys(lines[0])" :key="key">{{ key }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="l in lines" :key="`l-${l.screen_id}-${l.line_id}`">
-            <td>{{ l.screen_id }}</td>
-            <td>{{ l.line_id }}</td>
-            <td>{{ l.line }}</td>
-            <td>{{ l.line_size }}</td>
-            <td>{{ l.line_type }}</td>
+            <td v-for="key in Object.keys(l)" :key="key">{{ l[key] }}</td>
           </tr>
         </tbody>
       </table>
@@ -71,7 +51,9 @@
       <div class="scroll-wrapper">
         <ScreenBlock
           v-for="screen in screens.filter(
-            (s) => s.parent_screen_id === null && s.from_branch_id === null
+            (s) =>
+              (s.parent_screen_id === null || s.parent_screen_id === '') &&
+              (s.from_branch_id === null || s.from_branch_id === '')
           )"
           :key="screen.screen_id"
           :screen="screen"
@@ -102,12 +84,15 @@
         <button type="submit" class="btn save">保存</button>
       </div>
     </form>
+    <button @click="goToPage()">戻る</button>
   </div>
 </template>
 
 <script>
 import ScreenBlock from "./components/ScreenBlock.vue";
+import { useRouter } from "vue-router";
 
+const router = useRouter();
 export default {
   components: { ScreenBlock },
   data() {
@@ -131,6 +116,7 @@ export default {
           parent_screen_id: null,
           from_branch_id: null,
           depth: 0,
+          preloadedImageUrls: {},
         },
       ],
       // 分岐テーブルの要素の配列　初期状態で分岐は存在しないため初期値なし
@@ -154,6 +140,39 @@ export default {
       characterFiles: {},
       backFiles: {},
     };
+  },
+  mounted() {
+    // DBから初期データを取得
+    fetch("http://localhost:8080/ikura/get")
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data.screens) && data.screens.length > 0) {
+          this.screens = data.screens;
+        }
+        if (Array.isArray(data.branches) && data.branches.length > 0) {
+          this.branches = data.branches;
+        }
+        if (Array.isArray(data.lines) && data.lines.length > 0) {
+          this.lines = data.lines;
+        }
+        console.log(this.screens);
+        console.log(this.branches);
+        console.log(this.lines);
+        console.log("初期データ読み込み完了");
+      })
+      .catch((error) => {
+        console.error("初期データの取得に失敗しました:", error);
+        alert("初期データの取得に失敗しました");
+      });
+    // 画像一覧取得
+    fetch("http://localhost:8080/ikura/images/list")
+      .then((res) => res.json())
+      .then((imageList) => {
+        imageList.forEach((filename) => {
+          const url = `http://localhost:8080/ikura/images/${filename}`;
+          this.preloadedImageUrls[filename] = url;
+        });
+      });
   },
   methods: {
     addLine(screenId) {
@@ -301,9 +320,7 @@ export default {
       if (targetFlag) {
         this.branches = this.branches.filter((b) => b.screen_id !== screenId);
       } else {
-        alert(
-          `分岐先に画面が存在するため分岐を削除できません。\n分岐を削除する場合は紐づく画面を全て削除してから分岐を削除してください。`
-        );
+        alert(`分岐先に画面が存在するため分岐を削除できません。`);
       }
     },
 
@@ -337,6 +354,44 @@ export default {
       };
     },
     async submitData() {
+      // 状態チェック
+      for (const screen of this.screens) {
+        const isBranchRoot = this.branches.some(
+          (b) => b.screen_id === screen.screen_id
+        );
+        const isEndScreen =
+          screen.screen_type === "2" || screen.screen_type === "3"; // 2:ゲームオーバー, 3:クリア
+        const hasNext = screen.next_screen_id !== null;
+
+        if (!isBranchRoot && !isEndScreen && !hasNext) {
+          alert(`画面 ${screen.screen_id} に次の画面が設定されていません。`);
+          return;
+        }
+      }
+
+      // ✅ ② 分岐の next_screen_id チェック
+      for (const branch of this.branches) {
+        if (
+          branch.next_screen_id === null ||
+          branch.next_screen_id === undefined ||
+          branch.next_screen_id === ""
+        ) {
+          alert(
+            `画面 ${branch.screen_id} の分岐に次の画面が設定されていません。`
+          );
+          return;
+        }
+      }
+      console.log("aaaaaaaaaaaaaaaaaaaaaaaa");
+      console.log(this.lines);
+      for (const line of this.lines) {
+        console.log(line);
+        if (line.line === null || line.line === undefined || line.line === "") {
+          alert(`画面 ${line.screen_id} に空のセリフがあります。`);
+          return;
+        }
+      }
+
       const formData = new FormData();
 
       // JSON部分
@@ -350,12 +405,23 @@ export default {
         new Blob([JSON.stringify(payload)], { type: "application/json" })
       );
 
-      // ファイル部分
+      // ファイル部分（重複送信防止）
+      const sentFileNames = new Set();
+
+      // キャラクターファイル送信（重複ファイルはスキップ）
       for (const [screenId, file] of Object.entries(this.characterFiles)) {
-        formData.append(`character_file_${screenId}`, file);
+        if (!sentFileNames.has(file.name)) {
+          formData.append(`character_file_${screenId}`, file);
+          sentFileNames.add(file.name);
+        }
       }
+
+      // 背景ファイル送信（重複ファイルはスキップ）
       for (const [screenId, file] of Object.entries(this.backFiles)) {
-        formData.append(`back_file_${screenId}`, file);
+        if (!sentFileNames.has(file.name)) {
+          formData.append(`back_file_${screenId}`, file);
+          sentFileNames.add(file.name);
+        }
       }
 
       const res = await fetch("http://localhost:8080/ikura/scenario", {
@@ -397,6 +463,9 @@ export default {
         }
       };
       input.click();
+    },
+    goToPage() {
+      this.$router.push("/");
     },
   },
 };
@@ -440,5 +509,23 @@ export default {
 .scroll-wrapper {
   overflow-x: auto;
   min-width: 1200px;
+}
+
+/* デバッグ用 */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+th,
+td {
+  border: 1px solid #999;
+  padding: 8px;
+  text-align: left;
+}
+
+th {
+  background-color: #f2f2f2;
 }
 </style>

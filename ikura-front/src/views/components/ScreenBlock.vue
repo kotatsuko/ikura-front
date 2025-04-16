@@ -2,18 +2,19 @@
   <div class="screen-block-wrapper" :style="{ marginLeft: `${depth}px` }">
     <div class="screen-block">
       <h3 class="screen-title">画面 {{ screen.screen_id }}</h3>
+
       <!-- キャラクター画像プレビュー -->
       <img
-        v-if="characterFiles && characterFiles[screen.screen_id]"
-        :src="getImageUrl(characterFiles[screen.screen_id])"
+        v-if="getCharacterImageUrl(screen.screen_id)"
+        :src="getCharacterImageUrl(screen.screen_id)"
         alt="キャラ画像"
         class="preview-image"
       />
 
       <!-- 背景画像プレビュー -->
       <img
-        v-if="backFiles && backFiles[screen.screen_id]"
-        :src="getImageUrl(backFiles[screen.screen_id])"
+        v-if="getBackImageUrl(screen.screen_id)"
+        :src="getBackImageUrl(screen.screen_id)"
         alt="背景画像"
         class="preview-image"
       />
@@ -47,20 +48,28 @@
       <!-- 入力欄 -->
       <div class="input-grid">
         <div class="form-group" v-for="(field, key) in screenFields" :key="key">
-          <!-- ドロップダウン選択 -->
-          <select
-            v-if="dropdownOptions[key]"
-            v-model.number="screen[key]"
-            class="input"
-          >
-            <option
+          <!-- ラジオボタン表示 -->
+          <div v-if="dropdownOptions[key]">
+            <label
               v-for="(label, value) in dropdownOptions[key]"
-              :value="value"
               :key="value"
+              class="radio-label"
             >
+              <input
+                type="radio"
+                :name="`${key}-${screen.screen_id}`"
+                :value="value"
+                v-model.number="screen[key]"
+                @change="onRadioChange(key, value, screen.screen_id)"
+                :disabled="
+                  key === 'screen_type' &&
+                  value === '1' &&
+                  screen.next_screen_id !== null
+                "
+              />
               {{ label }}
-            </option>
-          </select>
+            </label>
+          </div>
 
           <input
             v-if="field.type !== 'none'"
@@ -102,24 +111,29 @@
         >
           💬 セリフ入力
         </button>
+        <!-- 分岐が存在しないときのみ表示 -->
         <button
+          v-if="!branches.some((b) => b.screen_id === screen.screen_id)"
           type="button"
           class="btn"
           @click="$emit('add-screen', screen.screen_id)"
         >
           ＋ 次の画面を追加
         </button>
-        <button
+        <!-- <button
           type="button"
           class="btn"
           @click="$emit('add-branch', screen.screen_id)"
         >
           🔀 分岐追加
-        </button>
+        </button> -->
       </div>
 
       <div
-        v-if="visibleLineScreenIds.includes(screen.screen_id)"
+        v-if="
+          visibleLineScreenIds.includes(screen.screen_id) ||
+          lines.some((line) => line.screen_id === screen.screen_id)
+        "
         class="line-block"
       >
         <h4 class="subtitle">セリフ一覧</h4>
@@ -188,22 +202,23 @@
           }}
         </h4>
         <div class="branch-grid">
-          <p>branch_id</p>
+          <!-- <p>branch_id</p>
           <input :value="branch.branch_id" class="input readonly" disabled />
           <p>screen_id</p>
-          <input :value="branch.screen_id" class="input readonly" disabled />
+          <input :value="branch.screen_id" class="input readonly" disabled /> -->
           <input
             v-model="branch.button_label"
             class="input"
             placeholder="ボタンラベル"
           />
-          <p>next_screen_id</p>
+          <!-- <p>next_screen_id</p>
           <input
             v-model.number="branch.next_screen_id"
             class="input"
             placeholder="次画面ID"
-          />
+          /> -->
           <button
+            v-if="branch.next_screen_id === null"
             class="btn"
             @click="$emit('add-branch-screen', branch, depth + 1)"
           >
@@ -243,7 +258,8 @@
       <ScreenBlock
         v-for="child in screens.filter(
           (s) =>
-            s.parent_screen_id === screen.screen_id && s.from_branch_id === null
+            s.parent_screen_id === screen.screen_id &&
+            (s.from_branch_id === null || s.from_branch_id === '')
         )"
         :key="child.screen_id"
         :screen="child"
@@ -260,6 +276,7 @@
         @toggle-line="$emit('toggle-line', $event)"
         @add-screen="$emit('add-screen', $event)"
         @init-screen="$emit('init-screen', $event)"
+        @init-branch="$emit('init-branch', $event)"
         @add-branch="$emit('add-branch', $event)"
         @add-branch-screen="$emit('add-branch-screen', $event, depth)"
         @select-character-file="$emit('select-character-file', $event)"
@@ -319,6 +336,41 @@ export default {
     getImageUrl(file) {
       return file ? URL.createObjectURL(file) : "";
     },
+    onRadioChange(key, value, screenId) {
+      // 画面タイプが「分岐画面（例：1）」の場合に分岐追加イベントを発火
+      if (key === "screen_type" && value === "1") {
+        this.$emit("add-branch", screenId);
+      }
+    },
+    getImageUrl(file) {
+      return file ? URL.createObjectURL(file) : "";
+    },
+
+    // ✅ キャラ画像取得
+    getCharacterImageUrl(screenId) {
+      const file = this.characterFiles[screenId];
+      if (file) {
+        return this.getImageUrl(file);
+      }
+      const screen = this.screens.find((s) => s.screen_id === screenId);
+      if (screen && screen.character_file_name) {
+        return `/ikura/images/${screen.character_file_name}`;
+      }
+      return null;
+    },
+
+    // ✅ 背景画像取得
+    getBackImageUrl(screenId) {
+      const file = this.backFiles[screenId];
+      if (file) {
+        return this.getImageUrl(file);
+      }
+      const screen = this.screens.find((s) => s.screen_id === screenId);
+      if (screen && screen.back_file_name) {
+        return `/ikura/images/${screen.back_file_name}`;
+      }
+      return null;
+    },
   },
 };
 </script>
@@ -339,7 +391,7 @@ export default {
   margin-bottom: 12px;
 }
 .input-grid {
-  width: 160px;
+  width: 800px;
 }
 .form-group {
   flex: 1 1 45%;
